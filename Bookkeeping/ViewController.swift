@@ -31,6 +31,7 @@ class ViewController: UIViewController, UITableViewDataSource, UITableViewDelega
     
     override func viewDidLoad() {
         super.viewDidLoad()  // Do any additional setup after loading the view.
+        loadDataArray()
     }
     
     @IBAction func addData(_ sender: Any) {
@@ -49,8 +50,7 @@ class ViewController: UIViewController, UITableViewDataSource, UITableViewDelega
         nameField.resignFirstResponder()
         
         updateTotal()
-        totalCostLabel.text = "\(total)"   //將計算的結果顯⽰在 totalCostLabel
-        
+        saveDataArray()
     }
     
     func tableView(_ tableView: UITableView, canEditRowAt indexPath:IndexPath) -> Bool { return true }  //讓edit的功能在每個位置的row都啟⽤
@@ -61,7 +61,7 @@ class ViewController: UIViewController, UITableViewDataSource, UITableViewDelega
             dataArray.remove(at: indexPath.row ) //從 array 移除資料
             tableView.deleteRows(at: [indexPath], with: .top) //告訴table view要刪掉這些位置(array)的資料的row，使⽤往上刪除的動畫
             updateTotal()
-            totalCostLabel.text = "\(total)"   //將計算的結果顯⽰在 totalCostLabel
+            saveDataArray()
             default: break  //其他edit的動作不做任何事
         }
     }
@@ -69,9 +69,81 @@ class ViewController: UIViewController, UITableViewDataSource, UITableViewDelega
     func updateTotal(){
         total = 0
         for item in dataArray {
-            if let cost = item["cost"] as? Double { total = total + cost }
+            if let cost = item["cost"] as? Double {
+                total = total + cost
+            }
         }
-    totalCostLabel.text = "\(total)"   //將計算的結果顯⽰在 totalCostLabel
+        totalCostLabel.text = "\(total)"   //將計算的結果顯⽰在 totalCostLabel
+    }
+    
+    // 將字串寫入檔案的 method 需要有 file name 及要寫入的 string 兩種 input
+    func writeStringToFile(writeString:String, fileName:String) {
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else{ return }  //取得app專⽤資料夾路徑，並且確定檔案路徑存在
+        let fileURL = dir.appendingPathComponent(fileName)  //在路徑後加上檔名，組合成要寫入的檔案路徑
+        
+        //嘗試使⽤utf8格式寫入檔案，若寫入錯誤print錯誤
+        do{ try writeString.write(to: fileURL, atomically: false, encoding: .utf8) } catch { print("write error") }
+    }
+
+    // 將檔案讀出成字串的 method 只需要 input 檔名，return 讀取出來的 string
+    func readFileToString(fileName:String) -> String {
+        guard let dir = FileManager.default.urls(for: .documentDirectory,in: .userDomainMask).first else{ return "" }  //取得app專⽤資料夾路徑，並且確定檔案路徑存在，如果不存在，return空字串
+        let fileURL = dir.appendingPathComponent(fileName)  //在路徑後加上檔名，組合成要讀取的檔案路徑
+        var readString = ""  //宣告要儲存讀取出來的string的變數
+        
+        //嘗試使⽤utf8格式讀取字串，若讀取錯誤print錯誤
+        do{ try readString = String.init(contentsOf: fileURL, encoding: .utf8) } catch { print("read error") }
+        return readString //return讀取出的string
+    }
+
+    // 將 Dictionary 轉成csv字串格式，並且寫入檔案的功能包成⼀個 method
+    func saveDataArray(){
+        var finalString = "" //宣告儲存最後string的變數
+        var csvString = ""
+        for dictionary in dataArray {
+            let date = dictionary["date"]
+            let name = dictionary["name"] as! String
+            let cost = dictionary["cost"] as! Double
+            
+            let formatter = DateFormatter() //宣告要拿來轉換時間的formatter
+            formatter.dateFormat = "yyyy/MM/dd hh:mm" //設定字串轉換要⽤的格式
+            let dateString = formatter.string(from:date as! Date) //轉換時間成字串
+            
+            csvString = "\(dateString),\(name),\(cost)\n"
+            finalString.append(csvString)
+        }
+        //let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        //print("[saveDataArray] writing to dir=", dir)  //檢查txt檔存放位置
+        
+        writeStringToFile(writeString: finalString, fileName:"data.txt")  //寫入data.txt檔案
+    }
+    
+    //載入 Dictionary Array 的 function
+    func loadDataArray() {
+        print("[loadDataArray] invoked")
+        var finalArray = [[String:Any]]()  //宣告儲存Array最後的結果的變數
+        let csvString = readFileToString(fileName: "data.txt")  //讀取data.txt的檔案內容/
+        let lineOfString = csvString.components(separatedBy: "\n")  //⽤"\n"將每⼀筆資料分開
+        
+        let a = lineOfString.count
+
+        //iterate 每⼀筆資料的string
+        if a > 1 {
+            for count in 0...a-2 {
+                let pendingArray = lineOfString[count].components(separatedBy: ",")
+                
+                let formatter = DateFormatter() //宣告要拿來轉換時間的formatter
+                formatter.dateFormat = "yyyy/MM/dd hh:mm" //設定字串轉換要⽤的格式
+                
+                let oldDate = formatter.date(from: pendingArray[0])
+                let oldName:String = pendingArray[1]
+                let oldCost = Double(pendingArray[2])
+                finalArray.append(["date":oldDate,"name":oldName,"cost":oldCost])
+            }
+        }
+
+    dataArray = finalArray //將讀取出的finalArray取代掉原本的dataArray
+    tableView.reloadData() //更新 tableview 與 介⾯資料
+    updateTotal()
     }
 }
-
